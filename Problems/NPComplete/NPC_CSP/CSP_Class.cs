@@ -11,11 +11,11 @@ class CSP : IProblem<CspSolver, CspVerifier, DummyVisualization>
     // --- Fields ---
     public string problemName { get; } = "Core Shuffling";
     public string formalDefinition { get; } =
-        "CSP = {<C0,C1,k> | there is a shuffle that turns core C0 into core C1 where the fuel crane travels a distance <= k}";
+        "CSP = {<P,R,k> | there is an order for the crane to carry out the moves in R, visiting the points in P, with total travel <= k}";
     public string problemDefinition { get; } =
         "Decide whether a fuel crane can rearrange a reactor core from one layout to another without traveling more than a given distance.";
     public string inputDescription { get; } =
-        "C0, the starting core layout; C1, the final core layout; and k, the maximum distance the crane may travel";
+        "P, a list of (row,col) locations; R, a set of required (pickup,dropoff) moves between them; and k, the maximum distance the crane may travel";
     public string outputDescription { get; } = "True if such a shuffle exists, False otherwise";
     public string source { get; } = "Antonio Tahhan, Proof Paper #2";
     public string sourceFile { get; } = SourceFile.Path();
@@ -26,19 +26,19 @@ class CSP : IProblem<CspSolver, CspVerifier, DummyVisualization>
     // Closest category in Garey & Johnson
     public ProblemType problemType { get; } = ProblemType.SequencingAndScheduling;
 
-    public const string InstanceGrammar = "{(C0,C1,K) | C0 is list, C1 is list, K is int}";
-    public const string DefaultInstance = "(((A,B),(C,D)),((B,E),(C,D)),20)";
+    public const string InstanceGrammar = "{(P,R,K) | P is list, R is set, K is int}";
+    public const string DefaultInstance = "(((1,1),(1,2),(0,0)),{(0,2),(1,0),(2,1)},20)"; //Real BWR cores have over 600 assemblys!!
+
     public string defaultInstance { get; } = DefaultInstance;
     public string instanceFormat { get; } =
-        $"Format: {InstanceGrammar} Each layout is a list of rows, and each row is a list of assembly names (use _ for an empty spot). Example: {DefaultInstance}";
+        $"Format: {InstanceGrammar} P is a list of (row,col) points, R is a set of (from,to) point indices, meaning the assembly at point from moves to point to, and K is the distance limit. Example: {DefaultInstance}";
 
-    // Proposed format, the verifier doesn't use it yet
+    // Proposed format
     public string certificateFormat { get; } =
-        "Format: an ordered list of (assembly,(fromRow,fromCol),(toRow,toCol)) moves, where (0,0) is the transfer location. Example: ((A,(1,1),(0,0)),(B,(1,2),(1,1)),(E,(0,0),(1,2)))";
-
+        "Format: an ordered list of (pickup,dropoff) point indices, the order the crane performs the moves. Example: ((0,2),(1,0),(2,1))";
     public string instance { get; }
-    public List<List<string>> C0 { get; }
-    public List<List<string>> C1 { get; }
+    public List<(int x, int y)> points { get; }
+    public List<(int pickup, int dropoff)> moves { get; }
     public int K { get; }
 
     public CspSolver defaultSolver { get; } = new();
@@ -55,17 +55,23 @@ class CSP : IProblem<CspSolver, CspVerifier, DummyVisualization>
 
         StringParser csp = new(InstanceGrammar);
         csp.parse(input);
-        C0 = ReadLayout(csp["C0"]);
-        C1 = ReadLayout(csp["C1"]);
+        points = ReadPairs(csp["P"]);
+        moves = ReadPairs(csp["R"]);
         K = int.Parse(csp["K"].ToString());
     }
 
-    // Turns a parsed list of rows into a grid of assembly names
-    private static List<List<string>> ReadLayout(UtilCollection layout)
+    // Turns a parsed list of (a,b) pairs into int tuples
+    private static List<(int, int)> ReadPairs(UtilCollection pairs)
     {
-        return layout
+        return pairs
             .ToList()
-            .Select(row => row.ToList().Select(cell => cell.ToString()).ToList())
+            .Select(pair =>
+            {
+                List<UtilCollection> c = pair.ToList();
+                return (int.Parse(c[0].ToString()), int.Parse(c[1].ToString()));
+            })
             .ToList();
     }
 }
+//dotnet run
+//npm run dev

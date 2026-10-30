@@ -8,44 +8,43 @@ namespace API.Problems.NPComplete.NPC_CSP;
 
 class CSP : IProblem<CspSolver, CspVerifier, DummyVisualization>
 {
-    // --- Fields ---
     public string problemName { get; } = "Core Shuffling";
     public string formalDefinition { get; } =
-        "CSP = {<P,R,k> | there is an order for the crane to carry out the moves in R, visiting the points in P, with total travel <= k}";
+        "CSP = {<C0,C1,k> | a crane can transform C0 into C1 with total travel <= k}";
     public string problemDefinition { get; } =
-        "Decide whether a fuel crane can rearrange a reactor core from one layout to another without traveling more than a given distance.";
+        "Decide whether a crane can rearrange reactor cores within a distance limit.";
     public string inputDescription { get; } =
-        "P, a list of (row,col) locations; R, a set of required (pickup,dropoff) moves between them; and k, the maximum distance the crane may travel";
+        "C0 and C1 contain (cn,x,y) tuples. C0 ends with (P,x,y,{cores}), describing the pool. K is the distance limit.";
     public string outputDescription { get; } = "True if such a shuffle exists, False otherwise";
     public string source { get; } = "Antonio Tahhan, Proof Paper #2";
     public string sourceFile { get; } = SourceFile.Path();
     public string wikiName { get; } = "";
     public string[] contributors { get; } = { "Quinton Smith" };
     public ComplexityClass complexityClass { get; } = ComplexityClass.NPComplete;
-
-    // Closest category in Garey & Johnson
     public ProblemType problemType { get; } = ProblemType.SequencingAndScheduling;
 
-    public const string InstanceGrammar = "{(P,R,K) | P is list, R is set, K is int}";
-    public const string DefaultInstance = "(((1,1),(1,2),(0,0)),{(0,2),(1,0),(2,1)},20)"; //Real BWR cores have over 600 assemblys!!
+    public const string InstanceGrammar = "{(C0,C1,K) | C0 is list, C1 is list, K is int}";
+
+    public const string DefaultInstance =
+        "(((A,1,2),(B,2,2),(C,1,1),(D,2,1),(P,0,2,{E})),((B,1,2),(E,2,2),(C,1,1),(D,2,1)),20)";
 
     public string defaultInstance { get; } = DefaultInstance;
     public string instanceFormat { get; } =
-        $"Format: {InstanceGrammar} P is a list of (row,col) points, R is a set of (from,to) point indices, meaning the assembly at point from moves to point to, and K is the distance limit. Example: {DefaultInstance}";
-
-    // Proposed format
+        $"Format: {InstanceGrammar}. Use (cn,x,y) for cores and a final (P,x,y,{{cores}}) in C0. All coordinates share the same coordinate system. Example: {DefaultInstance}";
     public string certificateFormat { get; } =
-        "Format: an ordered list of (pickup,dropoff) point indices, the order the crane performs the moves. Example: ((0,2),(1,0),(2,1))";
+        "An ordered list of (cn,fromX,fromY,toX,toY) transfers.";
+
     public string instance { get; }
-    public List<(int x, int y)> points { get; }
-    public List<(int pickup, int dropoff)> moves { get; }
+    public List<(string cn, int x, int y)> C0 { get; }
+    public List<(string cn, int x, int y)> C1 { get; }
+    public (int x, int y) poolPosition { get; }
+    public HashSet<string> poolCores { get; }
     public int K { get; }
 
     public CspSolver defaultSolver { get; } = new();
     public CspVerifier defaultVerifier { get; } = new();
     public DummyVisualization defaultVisualization { get; } = new();
 
-    // --- Methods Including Constructors ---
     public CSP()
         : this(DefaultInstance) { }
 
@@ -53,25 +52,36 @@ class CSP : IProblem<CspSolver, CspVerifier, DummyVisualization>
     {
         instance = input;
 
-        StringParser csp = new(InstanceGrammar);
-        csp.parse(input);
-        points = ReadPairs(csp["P"]);
-        moves = ReadPairs(csp["R"]);
-        K = int.Parse(csp["K"].ToString());
+        StringParser parser = new(InstanceGrammar);
+        parser.parse(input);
+
+        var initial = parser["C0"].ToList();
+        var pool = initial[^1].ToList();
+        initial.RemoveAt(initial.Count - 1);
+
+        C0 = ReadLayout(initial);
+        C1 = ReadLayout(parser["C1"].ToList());
+
+        poolPosition = (int.Parse(pool[1].ToString()), int.Parse(pool[2].ToString()));
+
+        poolCores = pool[3].ToList().Select(core => core.ToString()).ToHashSet();
+
+        K = int.Parse(parser["K"].ToString());
     }
 
-    // Turns a parsed list of (a,b) pairs into int tuples
-    private static List<(int, int)> ReadPairs(UtilCollection pairs)
+    private static List<(string cn, int x, int y)> ReadLayout(IEnumerable<UtilCollection> entries)
     {
-        return pairs
-            .ToList()
-            .Select(pair =>
+        return entries
+            .Select(entry =>
             {
-                List<UtilCollection> c = pair.ToList();
-                return (int.Parse(c[0].ToString()), int.Parse(c[1].ToString()));
+                var fields = entry.ToList();
+
+                return (
+                    fields[0].ToString(),
+                    int.Parse(fields[1].ToString()),
+                    int.Parse(fields[2].ToString())
+                );
             })
             .ToList();
     }
 }
-//dotnet run
-//npm run dev
